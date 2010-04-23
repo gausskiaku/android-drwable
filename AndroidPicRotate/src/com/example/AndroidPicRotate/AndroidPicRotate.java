@@ -1,0 +1,187 @@
+package com.example.AndroidPicRotate;
+
+import android.app.Activity;
+import android.graphics.Matrix;
+import android.graphics.PointF;
+import android.os.Bundle;
+import android.util.FloatMath;
+import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnTouchListener;
+import android.widget.ImageView;
+
+public class AndroidPicRotate extends Activity implements OnTouchListener{
+
+
+
+	 Matrix oldMatrix = new Matrix();
+	 Matrix currentMatrix = new Matrix();	 
+	 PointF firstPoint = new PointF();
+	 float oldDist = 0;
+
+	 PointF secondPoint = new PointF();
+	 PointF mid = new PointF();
+	 
+	// We can be in one of these 3 states
+	static final int NONE = 0;
+	static final int DRAG = 1;
+	static final int ZOOM = 2;
+	int mode = NONE;
+	 
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+	     super.onCreate(savedInstanceState);
+	     setContentView(R.layout.main);
+
+	     ImageView ImageViewPic = (ImageView) findViewById(R.id.ImageViewPic);
+	     ImageViewPic.setOnTouchListener(this);
+
+	    }
+    
+    @Override  
+    public void onStart()
+    {
+    	Log.d("AndroidPicRotate","####onStart");
+    	super.onStart();
+    	
+    }
+    
+    @Override  
+    public void onRestart()
+    {
+    	Log.d("AndroidPicRotate","####onRestart");
+    	super.onRestart();
+    }
+    
+    @Override  
+    public void onResume()
+    {
+    	Log.d("AndroidPicRotate","####onResume");
+    	super.onResume();
+    	
+    }
+    
+    @Override  
+    public void onPause()
+    {
+    	Log.d("AndroidPicRotate","####onPause");
+    	super.onPause();
+    	
+    	Log.d("AndroidPicRotate","the activity runs in background");  	
+    }
+    
+    @Override  
+    public void onStop()
+    {
+    	Log.d("AndroidPicRotate","####onStop");
+    	Log.d("AndroidPicRotate","####activity is invisible: shoulde close the socket ??");
+    	super.onStop();
+    }
+    
+    @Override  
+    public void onDestroy()
+    {
+    	Log.d("AndroidPicRotate","####onDestroy");
+    	super.onDestroy();
+    	   	
+    }
+
+	@Override
+	public boolean onTouch(View view, MotionEvent event) {
+		// TODO Auto-generated method stub
+		//Log.d("AndroidPicRotate","onTouch");		
+		ImageView ImageViewPic = (ImageView) view;
+		
+		switch (event.getAction() & MotionEvent.ACTION_MASK) {	
+		
+		// Handle touch events here...
+			case MotionEvent.ACTION_DOWN:
+			{
+				Log.d("AndroidPicRotate","ACTION_DOWN");
+				Log.d("AndroidPicRotate","X = "+event.getX()+"	Y = "+event.getY());
+				
+				oldMatrix.set(currentMatrix);
+				firstPoint.set(event.getX(), event.getY());
+				mode = DRAG;				
+			}				
+				break;				
+			case MotionEvent.ACTION_UP:
+				Log.d("AndroidPicRotate","ACTION_UP");								
+				//break;				
+			case MotionEvent.ACTION_POINTER_UP:
+				Log.d("AndroidPicRotate","ACTION_POINTER_UP");
+
+				mode = NONE;
+				break;			
+			case MotionEvent.ACTION_MOVE:
+			{
+			//	Log.d("AndroidPicRotate","ACTION_MOVE");
+				
+				if (mode == DRAG)
+				{
+					Log.d("AndroidPicRotate","DRAG");
+					currentMatrix.set(oldMatrix);
+					currentMatrix.postTranslate(event.getX()-firstPoint.x,
+					 event.getY()-firstPoint.y);
+					
+				}
+				else if (mode == ZOOM)
+				{
+					Log.d("AndroidPicRotate","ZOOM");
+					
+					float newDist = spacing(event);
+					
+					if (newDist > 10f)
+					{
+						currentMatrix.set(oldMatrix);
+						float scale = newDist/oldDist;
+						
+						currentMatrix.postScale(scale, scale, mid.x, mid.y);
+					}
+					
+				}
+				else
+				{
+					Log.d("AndroidPicRotate",".........................");
+				}
+				
+			}
+			
+				break;		
+			case MotionEvent.ACTION_POINTER_DOWN:
+			{
+				Log.d("AndroidPicRotate","ACTION_POINTER_DOWN");
+				
+				oldDist = spacing(event);
+				if (oldDist > 10f)
+				{
+					oldMatrix.set(currentMatrix);
+					mid = midPoint(event);
+					mode = ZOOM;
+				} 
+			}
+				break;		
+		}
+		
+		ImageViewPic.setImageMatrix(currentMatrix);
+		return true;
+	}  
+ 
+	private float spacing(MotionEvent event) {
+		   float x = event.getX(0) - event.getX(1);
+		   float y = event.getY(0) - event.getY(1);
+		   return FloatMath.sqrt(x * x + y * y);
+		}
+	
+	private PointF midPoint(MotionEvent event)
+	{
+		PointF point = new PointF();
+		float x= (event.getX(0) + event.getX(1))/2;
+		float y= (event.getY(0) + event.getY(1))/2;
+		
+		point.set(x,y);
+		return (point);
+	}
+	
+}
