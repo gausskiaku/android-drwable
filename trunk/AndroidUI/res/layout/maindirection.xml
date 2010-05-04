@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="wrap_content"
+  android:layout_height="wrap_content">
+<Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/ButtonVirOk" android:layout_below="@+id/ButtonVirUp" android:layout_marginTop="10dip" android:layout_toRightOf="@+id/ButtonVirLeft" android:layout_marginLeft="10dip" android:background="@drawable/ok"></Button>
+
+
+
+<Button android:layout_width="wrap_content" android:layout_below="@+id/ButtonVirUp" android:layout_toRightOf="@+id/ButtonVirOk" android:layout_height="wrap_content" android:background="@drawable/arrow_ri" android:id="@+id/ButtonVirRight" android:layout_marginLeft="10dip"></Button><Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_below="@+id/ButtonVirOk" android:layout_toRightOf="@+id/ButtonVirLeft" android:background="@drawable/arrow_d" android:layout_marginTop="10dip" android:id="@+id/ButtonVirDown"></Button><Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_below="@+id/ButtonVirUp" android:id="@+id/ButtonVirLeft" android:background="@drawable/arrow_l" android:layout_marginLeft="30dip"></Button><Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/ButtonVirUp" android:background="@drawable/arrow_u" android:layout_marginLeft="100dip" android:layout_below="@+id/ButtonVirMenu" android:layout_marginTop="5dip"></Button>
+
+
+
+
+
+
+<Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/ButtonVirExit" android:text="Exit" android:background="@drawable/button_bg" android:layout_marginLeft="20dip" android:layout_marginTop="10dip"></Button>
+<Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_toRightOf="@+id/ButtonVirExit" android:text="Menu" android:background="@drawable/button_bg" android:layout_marginLeft="10dip" android:id="@+id/ButtonVirMenu" android:layout_marginTop="10dip"></Button>
+</RelativeLayout>

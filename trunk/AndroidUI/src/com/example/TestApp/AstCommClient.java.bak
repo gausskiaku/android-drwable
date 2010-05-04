@@ -1,0 +1,750 @@
+package com.example.TestApp;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+
+import android.util.Log;
+
+
+//config
+class AstCommClientConfig {
+	
+	public AstCommClientConfig()
+	{		
+		discoveryIpAddr   		= null;
+	    discoveryPort     		= 0;        
+		discoveryInterval 	    = 5;   
+	    
+	    connectIpAddr           = null;
+		connectPort             = 0;          
+		connectInterval 		= 5;      		
+	    clientTimeout 			= 0;        
+	    
+	    keepAliveTimeout 	    = 15;
+	    messageEndian 			= AstEndian.AST_LITTLEENDIAN;
+	   // messageMagic  			= AstCommClient.COMM_CLIENT_MESSAGE_MAGIC;	    
+	}
+    
+	String   	discoveryIpAddr  ;	 //for UDP
+	int      	discoveryPort    ;	 //for UDP
+	int      	discoveryInterval;	  // interval (in second) for sending discovery message,UDP
+	
+	String      connectIpAddr;
+	int      	connectPort      ;  // the base port for connecting HMC(home media center)
+	int      	connectInterval  ;	// interval (in second) for connect/reconnect     
+	int      	clientTimeout    ;	// timeout value, sendMsg timeout
+	
+	int         keepAliveTimeout ;  //seconds
+	int  		messageEndian    ;
+	//static int     	messageMagic     ;
+}
+
+public class AstCommClient extends Thread{
+	
+	final boolean AST_PRINT_FUNCTION                    		= true;
+	final boolean AST_PRINT_DEBUG                       		= false;
+                                                        		
+	final int 		AST_COMM_THREAD_SLEEP                       =1000; //ms
+	final static int COMM_CLIENT_MESSAGE_MAGIC        			= 0x00C0FFEE;
+	
+	/** CSn where CS means direction, i.e. client to server */
+	final static int ASTCOMM_REQUEST_ENUM_BASE          		= 0x00001000;
+	final static int ASTCOMM_CLIENTKEEPALIVE            		= ASTCOMM_REQUEST_ENUM_BASE  + 1;
+	final static int ASTCOMM_TUNNEL_CS0                         = ASTCOMM_REQUEST_ENUM_BASE  + 0xA0;  
+	
+	// SCn where SC means direction, i.e. server to client
+	final static int MMI_PD_CONTROL_SC_ENUM_BASE      			= 0x00041100;
+	final int MMI_PD_CONTROL_CS_ID_0                    		= MMI_PD_CONTROL_SC_ENUM_BASE + 0xA0;
+	final int MMI_PD_CONTROL_CS_ID_1                    		= MMI_PD_CONTROL_SC_ENUM_BASE + 0xA1;
+	                                                    		
+	/**Return value*/                                   		
+	final int ASTCOMMCLIENT_BASEERROR            				= (-100);
+	                                             				
+	final static int ASTCOMMCLIENT_OK                   		= (0);
+	final int ASTCOMMCLIENT_OUT_OF_MEMORY      				    = (ASTCOMMCLIENT_BASEERROR-0);
+	final int ASTCOMMCLIENT_INVALID_HANDLE       				= (ASTCOMMCLIENT_BASEERROR-1);
+	final int ASTCOMMCLIENT_INVALID_STATE        				= (ASTCOMMCLIENT_BASEERROR-2);
+	final int ASTCOMMCLIENT_INVALID_PARAMETER    				= (ASTCOMMCLIENT_BASEERROR-3);
+	final int ASTCOMMCLIENT_THREAD_ERROR         				= (ASTCOMMCLIENT_BASEERROR-4);
+	final int ASTCOMMCLIENT_SOCKETCHANNEL_ERROR         		= (ASTCOMMCLIENT_BASEERROR-5);
+	
+	/**client state*/	
+	final static int ASTCOMMCLIENT_STATE_STARTED       		    =  0x00000004;	/* starting   */
+	final static int ASTCOMMCLIENT_STATE_DISCOVERY      		=  0x00000008;	/* discovery  */
+	final static int ASTCOMMCLIENT_STATE_CONNECTING     		=  0x00000010;	/* connecting,nonblock connecting */
+	final static int ASTCOMMCLIENT_STATE_CONNECTED      		=  0x00000020;	/* connected  */
+	final static int ASTCOMMCLIENT_STATE_RECONNECT      		=  0x00000040;	/* re-connect,reconnect the socket after it is disconnected */
+	final static int ASTCOMMCLIENT_STATE_WAITCONNECT    		=  0x00000080;	/* wait connect, only set in ClientThread to skip discovery*/
+	final static int ASTCOMMCLIENT_STATE_STOPPED       		    =  0x00000100;	/* stopping   */
+	final static int ASTCOMMCLIENT_STATE_LOGIN           		=  0x00000400;  /* login      */
+	final static int ASTCOMMCLIENT_STATE_RECONNECTREQ    		=  0x00000800;  /* reconnect WHEN connected, differ from ASTCOMMCLIENT_STATE_RECONNECT which reconnect on disconnected */
+	final static int ASTCOMMCLIENT_STATE_RETRYCONNECTPORT		=  0x00001000;  /* retry connecting HMC with different ports */
+	final static int ASTCOMMCLIENT_STATE_CANCELCONNECTING		=  0x00002000;  /* to cancel the pending connection,nonblock */
+
+	interface AstCommClientListener
+	{
+		public void onDiscovery(byte[] byte_rev);
+		public void onConnected();				//whether the socket has been connected to server
+		public void onConnectNonBlock(Socket commSock, AstCommClient client);
+		public void onReceive(byte[] byte_buf);
+		public void onDisconnect();
+		public void onClientTimeout();
+		public void onServerTimeout();
+		public void onReconnectError();
+		public void onError();  //send error
+		public void onLogin();
+		public void onRelogin(); 	
+
+	}
+	/*-----------------------------------------------------------------------*/
+	AstCommClientConfig  	config 				= null;
+    AstCommClientListener	listener 			= null;           //listener
+                         	
+	int                  	state;		        //socket state
+	Socket               	discoverySock 		= null;		//server socket,UDP
+	boolean              	isThreadRunning 	= false;  //stopping
+                         	
+	Selector             	selector      		= null;   
+	SocketChannel        	socketChannel 		= null;
+	                     	
+	String               	connectServerIpAddr = null; //save current address
+	int                  	connectServerPort	= 0;
+	int                  	connectTimeout 		= 1; //in second
+	long                 	timer 				= 0;          //update timer to set client timeout,seconds
+                         	                 	
+	String               	lastServerIpAddr	= null;
+	int                  	lastServerPort 		= 0;
+                         	               		
+	long                 	nextKeepAlive 		= 0;		//next keep alive time,seconds
+	long                 	nextSendMsgTime		= 0;   // next send Msg time,second
+	boolean              	lastSendFailed 		= false; //flag whether the socket is still connected
+	int                  	lastRcvdMsgId 		= 0;  //save Msg Id for later processing
+	
+	/*-----------------------------------------------------------------------*/
+	public AstCommClient()
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---constructor");
+
+		config = new AstCommClientConfig();
+		state = AstCommClient.ASTCOMMCLIENT_STATE_STARTED;
+	}
+
+	public void  AstCommClientSetConfig(AstCommClientConfig clientConfig)
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---setCommClientConfig");
+		
+		config = clientConfig;			//config 
+	}
+	
+	public int AstCommClientSetListener(PDControlClient pDControlClient)
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---setCommClientListener");
+		int err = ASTCOMMCLIENT_OK;
+		
+		listener = pDControlClient;
+		
+		return err;		
+	}
+	
+	public int AstCommClientConnectToBlock( String serverIP, int serverPort)
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---AstCommClientConnectToBlock");
+		int err = ASTCOMMCLIENT_OK;
+
+	blockA:
+	{
+		if ((serverIP ==null)||(serverPort < 0))
+		{
+			err = ASTCOMMCLIENT_INVALID_PARAMETER;
+			Log.d("AstCommClient","---AstCommClientConnectToBlock----Server IP or Port is wrong");
+			break blockA;	
+		}
+		
+		InetSocketAddress InetSocketAddress = new InetSocketAddress(serverIP,serverPort);
+		
+		switch (state)
+		{
+			case ASTCOMMCLIENT_STATE_STARTED:
+			{
+				Log.d("AstCommClientConnectToBlock","ASTCOMMCLIENT_STATE_STARTED");				
+			
+				// Create the selector 
+				try {
+					selector = Selector.open();
+					socketChannel = SocketChannel.open();
+					socketChannel.configureBlocking(true);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					Log.d("AstCommClientConnectToBlock","IOException");	
+					e.printStackTrace();
+					err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+					
+					break;
+				} 
+			}
+				
+			case ASTCOMMCLIENT_STATE_RECONNECT:
+			{
+				try {
+					socketChannel.connect(InetSocketAddress);
+					state = ASTCOMMCLIENT_STATE_CONNECTING;
+					// Before the socket is usable, the connection must be completed by calling finishConnect(), which is non-blocking 
+					long initialTime = AstCommClientGetCurrentTime();
+					
+
+					
+					while (!socketChannel.finishConnect())
+					{
+						if (AstCommClientGetCurrentTime()-initialTime>connectTimeout)
+						{
+							Log.d("AstCommClientConnectTo","Connection error... ....");
+							err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+							//listener.onClientTimeout();
+							break blockA;
+						}
+						else 
+							Log.d("AstCommClientConnectToBlock","Connection is not finished,Waiting... ....");
+
+					}
+					Log.d("AstCommClient","    isConnected() = "+socketChannel.isConnected() );
+					
+					while(socketChannel.isConnectionPending())
+					{
+						Log.d("AstCommClientConnectToBlock","isConnectionPending... ....");
+					}
+					
+					if (AST_PRINT_DEBUG)
+						Log.d("AstCommClient","--AstCommClientConnectToBlock: Success");
+					
+					// Register the channel with selector, listening for all events
+					socketChannel.register(selector, socketChannel.validOps());
+					listener.onConnected();
+						
+					//open the thread
+					isThreadRunning = true;
+					start();
+	            	
+					//update timer
+					long now = AstCommClientGetCurrentTime();
+					timer = now + config.clientTimeout;
+					
+					lastServerIpAddr = serverIP;
+					lastServerPort   = serverPort;	 
+					state            = ASTCOMMCLIENT_STATE_CONNECTED;  //Login
+					
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					Log.d("AstCommClientConnectToBlock","IOException 2");	
+					err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+					
+				}	
+			}
+				break;
+				
+			default:
+			{
+				err = ASTCOMMCLIENT_INVALID_STATE;
+				Log.d("AstCommClient","Calling ConnectTo while client is not started or reconnect");
+				break;
+			}
+				
+		}		
+	}
+		return err;
+	}	
+	
+
+	public int AstCommClientConnectToNonBlock( String serverIP, int serverPort)	
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---AstCommClientConnectToNonBlock");
+		int err = ASTCOMMCLIENT_OK;
+
+	blockA:
+	{
+		if ((serverIP ==null)||(serverPort < 0))
+		{
+			err = ASTCOMMCLIENT_INVALID_PARAMETER;
+			Log.d("AstCommClient","---AstCommClientConnectToNonBlock----Server IP or Port is wrong");
+			break blockA;	
+		}
+		
+		InetSocketAddress InetSocketAddress = new InetSocketAddress(serverIP,serverPort);
+		
+		switch (state)
+		{
+			case ASTCOMMCLIENT_STATE_STARTED:
+			{
+				Log.d("AstCommClientConnectToNonBlock","ASTCOMMCLIENT_STATE_STARTED");				
+			
+				// Create the selector 
+				try {
+					selector = Selector.open();
+					socketChannel = SocketChannel.open();
+					socketChannel.configureBlocking(false);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					Log.d("AstCommClientConnectToNonBlock","IOException");	
+					e.printStackTrace();
+					err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+					
+					break;
+				} 
+			}
+				
+			case ASTCOMMCLIENT_STATE_RECONNECT:
+			{
+				try {
+					socketChannel.connect(InetSocketAddress);
+					state = ASTCOMMCLIENT_STATE_CONNECTING;
+					// Before the socket is usable, the connection must be completed by calling finishConnect(), which is non-blocking 
+				//	long initialTime = AstCommClientGetCurrentTime();
+					
+					if (socketChannel.isConnectionPending())
+					{
+						Log.d("AstCommClientConnectToNonBlock","isConnectionPending... ....");
+					}
+
+					if (socketChannel.isConnected())
+					{
+						Log.d("AstCommClientConnectToNonBlock","isConnected... ....");
+					}
+					Log.d("AstCommClientConnectToNonBlock","finishConnect()... ....");
+					
+
+					
+					while (!socketChannel.finishConnect())
+					{
+						Log.d("AstCommClientConnectToNonBlock","Connection is not finished,Waiting... ....");
+
+					}
+
+					if (socketChannel.isConnectionPending())
+					{
+						Log.d("AstCommClientConnectToNonBlock","isConnectionPending... ....");
+					}
+
+					if (socketChannel.isConnected())
+					{
+						Log.d("AstCommClientConnectToNonBlock","isConnected... ....");
+					}
+					
+					
+					if (AST_PRINT_DEBUG)
+						Log.d("AstCommClient","--AstCommClientConnectToNonBlock: Success");
+					
+					// Register the channel with selector, listening for all events
+					socketChannel.register(selector, socketChannel.validOps());
+					listener.onConnected();
+						
+					//open the thread
+					isThreadRunning = true;
+					start();
+	            	
+					//update timer
+					long now = AstCommClientGetCurrentTime();
+					timer = now + config.clientTimeout;
+					
+					lastServerIpAddr = serverIP;
+					lastServerPort   = serverPort;	 
+					state            = ASTCOMMCLIENT_STATE_CONNECTED;  //Login
+					
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					Log.d("AstCommClientConnectToNonBlock","IOException 2");	
+					err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+					
+				}	
+			}
+				break;
+				
+			default:
+			{
+				err = ASTCOMMCLIENT_INVALID_STATE;
+				Log.d("AstCommClient","Calling ConnectTo while client is not started or reconnect");
+				break;
+			}	
+		}		
+	}
+		return err;
+	}	
+	
+	public int AstCommClientDisconnect()
+	{
+		//if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","---AstCommClientDisconnect");		
+		int err = ASTCOMMCLIENT_OK;
+		
+		isThreadRunning = false;   //stop the thread
+		
+		try {
+			//selector.close();
+			socketChannel.close();
+			
+			listener.onDisconnect();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+			//listener.on
+			
+			Log.d("AstCommClient","AstCommClientDisconnect: IOException");	
+		}		
+				
+		return err;
+	}
+	
+	public int AstCommClientSend(int id, byte[] data)
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","AstCommClientSend");		
+		int err = ASTCOMMCLIENT_OK;	
+		
+		//Log.d("AstCommClient","AstCommClientSend: socketChannel.isConnected() ="+socketChannel.isConnected());	
+		if (socketChannel.isConnected())
+		{
+			if (socketChannel.keyFor(selector).isWritable())
+			{
+				//Log.d("AstCommClient","AstCommClientSend: Key isWritable");
+				
+				ByteBuffer buf = ByteBuffer.allocateDirect(1024); 
+				byte[] tmp_buf =new byte[12];
+				buf.clear();
+				
+				AstEndian.int32ToByteLE(COMM_CLIENT_MESSAGE_MAGIC, tmp_buf, 0);
+				AstEndian.int32ToByteLE(id, tmp_buf, 4);
+				
+				if (data != null)
+				{
+					AstEndian.int32ToByteLE(data.length, tmp_buf, 8);
+					buf.put(tmp_buf);
+					buf.position(12);
+					buf.put(data);
+				}
+				else
+				{
+					AstEndian.int32ToByteLE(0, tmp_buf, 8);
+					buf.put(tmp_buf);
+				}
+				buf.flip();
+
+				// Write bytes 
+				try {
+					int numBytesWritten = socketChannel.write(buf);
+					
+					Log.d("AstCommClient","AstCommClientSend: numBytesWritten = "+numBytesWritten);
+					//Log.d("AstCommClient","AstCommClientSend: Sending Finished");
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+					lastSendFailed = true;
+					Log.d("AstCommClient","AstCommClientSend:	IOException");
+				} 
+			}
+			else
+				Log.d("AstCommClient","AstCommClientSend: Key is Not Writable");
+		}
+		else
+			Log.d("AstCommClient","AstCommClientSend: socketChannel is Not Connected");
+		
+		return err;
+	}
+
+	public int AstCommClientRecv()
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","Check AstCommClientRecv");	
+		int err = ASTCOMMCLIENT_OK;
+		
+		ByteBuffer buf = ByteBuffer.allocateDirect(1024); 
+		buf.clear(); 
+		
+
+		try {
+			int numBytesRead = socketChannel.read(buf);
+			if (numBytesRead == -1)
+			{
+    			// No more bytes can be read from the channel 
+    			Log.d("AstCommClient","AstCommClientRecv:	The socket might be disconnected, throw exception");
+				throw new IOException();
+
+			}
+			
+			Log.d("AstCommClient","AstCommClientRecv:	begin reading");
+			// To read the bytes, flip the buffer 
+			buf.flip(); 
+			int bufLimit = buf.limit();
+			byte[] tmp_buf = new byte[bufLimit];
+			
+			for (int i =0;i<bufLimit;i++)
+			{
+				tmp_buf[i] = buf.get(i);
+			}
+
+			listener.onReceive(tmp_buf);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			Log.d("AstCommClient","AstCommClientRecv:	IOException");
+			
+			listener.onDisconnect();
+		//	isThreadRunning = false;
+			state = ASTCOMMCLIENT_STATE_RECONNECT;			
+			err = ASTCOMMCLIENT_SOCKETCHANNEL_ERROR;
+			//socketChannel.close();			
+		} 
+		
+		return err;
+	}
+
+	
+	public long AstCommClientGetCurrentTime()
+	{	
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","AstCommClientGetCurrentTime");	
+		
+		  long time = System.currentTimeMillis()/1000;
+	
+		//  Log.d("AstCommClient","	system time = "+time);
+		return time;
+	}
+	
+	public int commcliKeepAlive()
+	{	
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","commClientKeepAlive");	
+		
+		int ret = 0;
+		long dwNow = AstCommClientGetCurrentTime();
+
+		if (dwNow > nextKeepAlive)
+		{
+			Log.d("commClientKeepAlive","---Send KeepAlive");
+		
+			ret = AstCommClientSend(ASTCOMM_CLIENTKEEPALIVE, null);
+			if (ret == ASTCOMMCLIENT_OK)
+			{
+				nextKeepAlive = dwNow + config.keepAliveTimeout;
+			}
+			else
+			{
+				Log.d("AstCommClient","Send KeepAlive Fail");
+				//listener.onError()
+				ret = -1;
+			}	
+		}
+			return ret;
+	}
+	
+	public int AstCommClientCheckTimer()
+	{	
+		if (AST_PRINT_FUNCTION)
+		Log.d("AstCommClient","AstCommClientCheckTimer");	
+		
+		int err = 0;
+		long now = AstCommClientGetCurrentTime();
+
+		if (AST_PRINT_DEBUG)
+		{
+			Log.d("AstCommClientCheckTimer","	now = "+now);
+			Log.d("AstCommClientCheckTimer","	timer= "+timer);
+		}
+
+		if ((config.clientTimeout != 0)&&(now > timer))
+		{
+			Log.d("AstCommClientCheckTimer","	Client is Timeout ");
+			err = -1;
+			listener.onClientTimeout();
+		}
+		return err;
+	}
+	
+	public int AstCommClientUpdateTimer()
+	{
+		if (AST_PRINT_FUNCTION)
+			Log.d("AstCommClient","AstCommClientUpdateTimer");	
+		
+		int err = ASTCOMMCLIENT_OK;
+		long now = AstCommClientGetCurrentTime();
+		
+		if (config.clientTimeout != 0)
+		{
+			Log.d("AstCommClientUpdateTimer","	Timer has been updated");			
+			timer = now + config.clientTimeout;
+		}
+		return err;
+	}
+	
+
+	@Override
+	public void run() {
+		// TODO Auto-generated method stub		
+
+		while (true)
+		{	
+			
+			if ((!isThreadRunning)||(AstCommClientCheckTimer()!= 0))
+				break;
+
+			if ((socketChannel==null)||(!socketChannel.isConnected()))	
+				try {
+					Thread.currentThread();
+					Thread.sleep(AST_COMM_THREAD_SLEEP);
+					continue;
+				} catch (InterruptedException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+					Log.e("AstCommClient","InterruptedException, can not sleep");
+				} 
+			
+			Log.d("AstCommClient","==========run ");
+
+			if (state == ASTCOMMCLIENT_STATE_CONNECTED)
+			{
+				try {								
+					// Wait for an event
+					selector.select();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					
+					Log.e("AstCommClient","run IOException");
+					break;
+				}
+				
+				// Get list of selection keys with pending events 
+				Iterator<SelectionKey> it = selector.selectedKeys().iterator(); 
+    	
+				// Process each key at a time 
+				while(it.hasNext())
+				{
+					// Get the selection key 
+					SelectionKey selKey = (SelectionKey)it.next(); 
+					// Remove it from the list to indicate that it is being processed 
+					it.remove(); 
+					
+					if (selKey.isValid() && selKey.isReadable())   
+					{
+						Log.d("AstCommClient", " 		run:isReadable-------------------");
+						AstCommClientRecv();
+					}
+					else
+						;
+					//Log.d("AstCommClient", " 		run:is Not Readable");
+			
+				}
+    	
+				//if (sending file)
+    	
+				// send KEEP ALIVE 
+				commcliKeepAlive();
+			}
+			else if (state == ASTCOMMCLIENT_STATE_LOGIN)
+			{
+				
+			}
+			else if (state == ASTCOMMCLIENT_STATE_RECONNECTREQ)
+			{
+				
+			}
+			else
+				Log.e("AstCommClient","		run: socket is disconnected!!");
+    	
+			try {
+				//Log.d("AstCommClient","============= sleep");
+				Thread.currentThread();
+				Thread.sleep(AST_COMM_THREAD_SLEEP);
+				
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				Log.d("AstCommClient"," InterruptedException");
+			}
+		}			
+	}
+	
+}
+
+
+
+class AstEndian
+{
+	public static final int AST_BIGENDIAN = 0;
+	public static final int AST_LITTLEENDIAN = 1;
+	
+	// set
+	public static void int32ToByteLE( int data, byte[] dst, int offset) 
+	{
+		for (int i = 0; i < 4; i++) 
+		{
+			dst[offset + i] = (byte) (data >> i * 8);
+		}
+	}
+	
+	public static void int32ToByteBE( int data, byte[] dst, int offset) 
+	{
+		for (int i = 0; i < 4; i++) 
+		{
+			dst[offset + i] = (byte) (data >> (4-i) * 8);
+		}
+	}
+	
+	// get
+	public static void byteLEToInt32Host(byte[] bytes, int[] dst, int offset)
+	{
+		if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN)
+			//byteLEToInt32BE(bytes, dst, offset);
+			;
+		else
+			//byteLEToInt32LE(bytes, dst, offset);
+			;
+	}
+	
+	/*
+	public static int byteBEToInt32Host(byte[] bytes, int[] dst, int offset)
+	{
+		if (ByteOrder.nativeOrder() == BIG_ENDIAN)
+			byteBEToInt32BE(bytes, dst, offset);
+		else
+			byteBEToInt32LE(bytes, dst, offset);
+	}
+	*/
+	
+
+	public static int byteLEToInt32LE(byte[] bytes,int offset) 
+	{			
+		int num = 0 ;
+
+		// TODO: read ONE INT32 only
+		
+		if (offset<bytes.length-3)
+		{
+			num  =   bytes[offset] & 0xFF;
+			num |= ((bytes[offset+1] << 8) & 0xFF00);
+			num |= ((bytes[offset+2] << 16) & 0xFF0000);
+			num |= ((bytes[offset+3] << 24) & 0xFF000000);
+		}
+		else
+			Log.e("byteLEToInt32LE","offset is wrong");
+	
+		return num;
+	}
+	
+	
+	// TODO:  
+	//public static int byteLEToInt32BE(byte[] bytes, int offset) 
+}

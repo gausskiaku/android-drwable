@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+      package="com.example.TestApp"
+      android:versionCode="1"
+      android:versionName="1.0">
+     <uses-permission android:name="android.permission.INTERNET" /> 
+     
+    <application 
+    			android:label="app"
+    			android:icon="@drawable/icon"    			   			
+    			>
+    			
+        <activity android:name=".AndroidUI"
+                  android:label="@string/app_name">                 
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>    
+     
+        <activity android:name=".SelectInputType"
+                  android:label="SelectInputType">
+        </activity>         
+ 
+         <activity android:name=".TextInput"
+                  android:label="TextInput">
+        </activity> 
+
+         <activity android:name=".CursorInput"
+                  android:label="CursorInput">
+        </activity> 
+                           
+        <activity android:name=".AccelerationInput"
+                   android:label="AccelerationInput">
+        </activity>                          
+                           
+        <activity android:name=".AndroidGestureDetector"
+                   android:label="AndroidGestureDetector">
+        </activity>   
+          <activity android:name=".ActivityScrollbar"
+                   android:label="ActivityScrollbar">
+        </activity>                                                     
+    </application>
+    
+    
+    <uses-sdk android:minSdkVersion="5" />
+
+</manifest> 

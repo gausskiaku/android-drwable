@@ -1,0 +1,238 @@
+package com.example.TestApp;
+
+import java.net.Socket;
+
+import android.util.Log;
+
+import com.example.TestApp.AstCommClient.AstCommClientListener;
+
+
+public class PDControlClient implements AstCommClientListener {
+
+	/** massage magic and id*/
+	final int HEADER_CLICK_ID                         		 = 0x000010A5;	                                                    	 
+	final static int MMI_PD_CONTROL_CS_ENUM_BASE      		 = 0x00001100;
+	final static int MMI_PD_CONTROL_SC_ENUM_BASE             = 0x40001100;
+	
+	final static int MMI_PD_CONTROL_CLIENT_WAIT_RESPONSE_BIT = 0x20000000;	  
+	                                                	
+	final static int MMI_PD_CONTROL_CS_ID_CURSOR_START		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA0;
+	final static int MMI_PD_CONTROL_CS_ID_CURSOR_DATA 		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA1;
+	final static int MMI_PD_CONTROL_CS_ID_CURSOR_STOP 		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA2;
+	final static int MMI_PD_CONTROL_CS_ID_ACC_START   		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA3;
+	final static int MMI_PD_CONTROL_CS_ID_ACC_DATA    		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA4;
+	final static int MMI_PD_CONTROL_CS_ID_ACC_STOP    		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA5;
+	final static int MMI_PD_CONTROL_CS_ID_TEXT_START  		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA6;
+	final static int MMI_PD_CONTROL_CS_ID_TEXT_DATA   		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA7;
+	final static int MMI_PD_CONTROL_CS_ID_TEXT_STOP   		 = MMI_PD_CONTROL_CS_ENUM_BASE + 0xA8;
+	final static int MMI_PD_CONTROL_CS_ID_COMMAND       	 = MMI_PD_CONTROL_CS_ENUM_BASE | 0xA9 |
+																MMI_PD_CONTROL_CLIENT_WAIT_RESPONSE_BIT;
+																
+	// SCn where SC means direction, i.e. server to client
+	final static int MMI_PD_CONTROL_CS_ID_0                  = MMI_PD_CONTROL_SC_ENUM_BASE | 0xA0;
+	final static int MMI_PD_CONTROL_CS_ID_1                  = MMI_PD_CONTROL_SC_ENUM_BASE | 0xA1;															
+
+	interface AstPDControlClientListener {		
+		public void onDiscovery(byte[] byte_rev);
+		public void onConnected();				//whether the socket has been connected to server
+		public void onConnectNonBlock(Socket commSock, AstCommClient client);
+		public void onClientTimeout();
+		public void onDisconnected();
+		public void onReceive(byte[] byte_buf);
+		public void onServerTimeout();
+		public void onConnectError();
+		public void onError();
+		public void onReconnectError();
+		public void onLogin();
+		public void onRelogin(); 	
+	
+	}
+	
+	
+	AstPDControlClientListener astPDControlClientListener = null;
+	private AstCommClient astCommClient = null;
+	private AstCommClientConfig pDControlConfig = null;
+
+
+public PDControlClient()
+{
+	Log.d("PDControlClient", "**constructor");
+		
+	//initialize 
+	astCommClient = new AstCommClient();	
+	pDControlConfig  = new AstCommClientConfig();
+	
+	astCommClient. AstCommClientSetConfig(pDControlConfig);
+	astCommClient.AstCommClientSetListener(this);
+
+	Log.d("PDControlClient",Thread.currentThread().getClass().toString());
+}
+
+public void setListener(AstPDControlClientListener clientListener)
+{
+	astPDControlClientListener	= clientListener;
+}
+
+public boolean connectTo(String serverIP, int serverPort)
+{
+	Log.d("PDControlClient", "**connectTo");
+	
+	boolean ret = true;
+	astCommClient.connectServerIpAddr = serverIP;
+	astCommClient.connectServerPort = serverPort;
+
+	if (astCommClient.AstCommClientConnectToBlock(serverIP,serverPort) != AstCommClient.ASTCOMMCLIENT_OK)
+	{
+		Log.d("PDControlClient", "  ConnectTo Error");
+		ret = false;
+	}
+		
+	
+	return ret;
+}
+
+public void sendMsg(int id, byte[] data)
+{
+	Log.d("PDControlClient", "**sendMsg");
+
+	 if (astCommClient.AstCommClientSend(id,data) != AstCommClient.ASTCOMMCLIENT_OK)
+	 {
+		 Log.e("PDControlClient", "	Sending Data Fails, Pls Check the Network!");
+		 
+		 if (astPDControlClientListener != null)
+			astPDControlClientListener.onError();
+	 }
+}
+
+public void disconnectSocket()
+{
+	Log.d("PDControlClient", "**disconnectSocket");
+
+	astCommClient.AstCommClientDisconnect();
+}
+
+public void setNull()
+{
+	astCommClient.isThreadRunning = false; //stop the thread
+	astCommClient.socketChannel   = null;
+	astCommClient.selector        = null;
+	astCommClient.config          = null;
+	                              
+	astPDControlClientListener    = null;
+	astCommClient                 = null;
+	pDControlConfig               = null;
+}
+
+@Override
+public void onClientTimeout() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onClientTimeout");
+	
+	if (astPDControlClientListener != null)		
+		astPDControlClientListener.onClientTimeout();
+}
+
+@Override
+public void onConnected() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onConnected");
+	
+	astCommClient.AstCommClientUpdateTimer();
+	
+	if (astPDControlClientListener != null)
+		astPDControlClientListener.onConnected();
+}
+
+@Override
+public void onConnectNonBlock(Socket commSock, AstCommClient client) {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onConnectNonBlock");
+	
+	astCommClient.AstCommClientUpdateTimer();
+	
+	if (astPDControlClientListener != null)
+	astPDControlClientListener.onConnectNonBlock(commSock, client);
+}
+
+@Override
+public void onDisconnect() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onDisconnect");
+
+	//astCommClient.isThreadRunning = false; //stop the thread
+
+
+	if (astPDControlClientListener != null)
+	astPDControlClientListener.onDisconnected();
+	//return ret;
+}
+
+@Override
+public void onDiscovery(byte[] byte_rev) {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onDiscovery");
+	
+	if (astPDControlClientListener != null)
+	astPDControlClientListener.onDiscovery(byte_rev);
+}
+
+@Override
+public void onLogin() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onLogin");
+	if (astPDControlClientListener != null)
+	astPDControlClientListener.onLogin();
+
+}
+
+
+
+@Override
+public void onRelogin() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onRelogin");
+	if (astPDControlClientListener != null)
+		astPDControlClientListener.onRelogin();
+}
+
+@Override
+public void onServerTimeout() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onServerTimeout");
+	
+	if (astPDControlClientListener != null)
+		astPDControlClientListener.onServerTimeout();
+}
+
+@Override
+public void onReceive(byte[] byteBuf) {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onReceive");
+
+	astCommClient.AstCommClientUpdateTimer();
+	
+	//translateInput(byteBuf);
+	
+	if (astPDControlClientListener != null)
+		astPDControlClientListener.onReceive(byteBuf);
+}
+
+@Override
+public void onError() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onError");
+	
+		if (astPDControlClientListener != null)
+		astPDControlClientListener.onError();
+}
+
+@Override
+public void onReconnectError() {
+	// TODO Auto-generated method stub
+	Log.d("PDControlClient","---onReconnectError");
+		if (astPDControlClientListener != null)
+		astPDControlClientListener.onReconnectError();
+}
+
+
+}
