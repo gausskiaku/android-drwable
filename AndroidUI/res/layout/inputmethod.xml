@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="wrap_content"
+  android:layout_height="wrap_content">
+
+<Button android:layout_height="wrap_content" android:id="@+id/ButtonTextInput" android:text="Text Input" android:textSize="20sp" android:layout_alignParentLeft="true" android:layout_marginLeft="10dip" android:layout_toLeftOf="@+id/ButtonQuit1" android:layout_width="150dip" android:layout_below="@+id/ButtonInputDisconnect" android:layout_marginTop="5dip"></Button>
+<Button android:layout_height="wrap_content" android:textSize="20sp" android:layout_alignParentRight="true" android:text="Disconnect" android:layout_marginRight="10dip" android:layout_width="125dip" android:id="@+id/ButtonInputDisconnect" android:layout_marginTop="10dip"></Button><Button android:layout_height="wrap_content" android:id="@+id/ButtonCursor" android:layout_below="@+id/ButtonTextInput" android:textSize="20sp" android:layout_marginTop="5dip" android:text="Cursor Input" android:layout_marginLeft="10dip" android:layout_alignParentLeft="true" android:layout_toLeftOf="@+id/ButtonQuit1" android:layout_width="150dip"></Button>
+<Button android:layout_height="wrap_content" android:id="@+id/ButtonAccelerometer" android:text="Accelerometer" android:textSize="20sp" android:layout_marginTop="5dip" android:layout_alignParentLeft="true" android:width="50dip" android:layout_below="@+id/ButtonCursor" android:layout_width="160dip" android:layout_marginLeft="10dip"></Button>
+
+
+
+
+
+
+<Button android:layout_height="wrap_content" android:layout_below="@+id/ButtonAccelerometer" android:layout_width="wrap_content" android:id="@+id/ButtonGestureDetector" android:text="Gesture Detector" android:textSize="20sp" android:layout_marginTop="5dip" android:layout_marginLeft="10dip" android:clickable="true"></Button>
+</RelativeLayout>

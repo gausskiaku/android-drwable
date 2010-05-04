@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<RelativeLayout android:id="@+id/RelativeLayout01" android:layout_width="fill_parent" android:layout_height="fill_parent" xmlns:android="http://schemas.android.com/apk/res/android">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/TextViewText" android:text="Text:" android:textSize="20sp" android:layout_marginLeft="10dip" android:layout_below="@+id/ButtonTextSend" android:layout_marginBottom="5dip"></TextView><EditText android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/EditText01" android:width="300dip" android:layout_marginLeft="10dip" android:layout_below="@+id/TextViewText" android:text="我是shengli"></EditText>
+
+
+<Button android:layout_height="wrap_content" android:layout_width="wrap_content" android:id="@+id/ButtonTextback" android:text="Back" android:layout_toLeftOf="@+id/ButtonTextSend" android:layout_alignParentTop="true" android:layout_above="@+id/TextViewText" android:layout_marginTop="10dip" android:layout_marginRight="5dip" android:textSize="20sp"></Button><Button android:layout_height="wrap_content" android:layout_width="wrap_content" android:id="@+id/ButtonTextSend" android:text="Send" android:layout_alignParentRight="true" android:layout_alignParentTop="true" android:layout_marginTop="10dip" android:layout_marginRight="10dip" android:width="70dip" android:textSize="20sp"></Button>
+
+
+</RelativeLayout>

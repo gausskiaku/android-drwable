@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<RelativeLayout android:id="@+id/RelativeLayout01" android:layout_width="fill_parent" android:layout_height="fill_parent" xmlns:android="http://schemas.android.com/apk/res/android">
+
+
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/TextViewAccelerometer" android:textSize="20sp" android:text="Accelerometer:" android:layout_marginLeft="10dip" android:layout_below="@+id/ButtonAcBack" android:layout_marginTop="10dip"></TextView><Button android:layout_height="wrap_content" android:layout_width="wrap_content" android:id="@+id/ButtonAcBack" android:text="Back" android:layout_alignParentTop="true" android:layout_marginTop="10dip" android:layout_marginLeft="10dip" android:textSize="20sp" android:width="70dip" android:layout_alignParentRight="true" android:layout_marginRight="10dip"></Button><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_below="@+id/TextViewAccelerometer" android:id="@+id/x" android:textSize="20sp" android:layout_marginLeft="10dip" android:layout_marginTop="5dip" android:text="X:"></TextView><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/y" android:layout_below="@+id/x" android:text="Y: " android:textSize="20sp" android:layout_marginLeft="10dip"></TextView><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: " android:textSize="20sp" android:id="@+id/z" android:layout_below="@+id/y" android:layout_marginLeft="10dip"></TextView>
+
+
+
+
+
+
+
+
+</RelativeLayout>

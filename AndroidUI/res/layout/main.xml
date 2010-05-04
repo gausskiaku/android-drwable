@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<RelativeLayout android:id="@+id/RelativeLayout01" android:layout_width="fill_parent" android:layout_height="fill_parent" xmlns:android="http://schemas.android.com/apk/res/android">
+
+
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/TextViewServerIP" android:text="Server IP:" android:textSize="20sp" android:layout_marginLeft="10dip" android:layout_marginBottom="3dip" android:layout_below="@+id/ButtonOK"></TextView>
+<TextView android:layout_height="wrap_content" android:layout_width="wrap_content" android:layout_above="@+id/TextViewServerIP" android:id="@+id/TextViewInfo" android:textSize="20sp" android:layout_marginLeft="10dip" android:layout_marginBottom="5dip" android:text="Server: Disconnected"></TextView><EditText android:layout_below="@+id/TextViewServerIP" android:id="@+id/EditTextServerIP" android:layout_marginBottom="3dip" android:text="10.6.64.200" android:layout_marginLeft="10dip" android:layout_width="300dip" android:layout_height="45dip"></EditText>
+<Button android:layout_height="wrap_content" android:id="@+id/ButtonOK" android:text="OK" android:textSize="20sp" android:layout_alignParentTop="true" android:layout_toLeftOf="@+id/ButtonQuit" android:layout_marginRight="3dip" android:layout_marginTop="20dip" android:layout_alignParentRight="true" android:layout_width="50dip"></Button><Button android:layout_height="wrap_content" android:layout_width="wrap_content" android:layout_toLeftOf="@+id/ButtonOK" android:id="@+id/ButtonMainQuit" android:text="Quit" android:layout_marginTop="20dip" android:textSize="20sp"></Button><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_below="@+id/EditTextServerIP" android:id="@+id/TextViewServerPort" android:text="Server Port:" android:layout_marginLeft="10dip" android:layout_marginBottom="3dip" android:textSize="20sp"></TextView>
+<EditText android:id="@+id/EditTextServerPort" android:layout_below="@+id/TextViewServerPort" android:layout_marginLeft="10dip" android:textSize="20sp" android:layout_width="300dip" android:text="5513" android:layout_height="45dip"></EditText>
+
+
+
+
+</RelativeLayout>
